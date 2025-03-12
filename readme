@@ -1,77 +1,69 @@
-Got it! Now, instead of using **Activity ID** as the cache key, we're using **Account Number**. The updated cache key format is:  
+Got it! That makes sense. So, here's a refined breakdown based on your clarification:
 
-### **Updated Cache Key Format**  
-```plaintext
-CacheKey: "Acct-{AccountNumber}_Page_{PageNumber}"
-```
-**Example:**  
-For **Account Number = 1000002022**, and **Page 1**, the cache key will be:  
-```plaintext
-CacheKey: "Acct-1000002022_Page_1"
-```
+### **Refined Caching Strategy:**
 
----
+1. **Initial API Call (`/phx/transactionActivity`):**
+   - When you initially call the `/phx/transactionActivity` endpoint, you retrieve the full set of transaction activities, which may span multiple pages.
+   - You will **cache the entire array of activities** for each page under a unique cache key based on the **account number** and **page number**. The cache key will look something like:
+     ```
+     accountNumber_ABC_page_1
+     ```
+     where:
+     - `accountNumber_ABC` is the account number (e.g., `12345_ABC`).
+     - `page_1` refers to the first page of the results.
+   
+2. **Cache Structure:**
+   - Cache the array of activities for that page under the constructed cache key. For example:
+     - `accountNumber_12345_ABC_page_1`: [activity1, activity2, activity3, ...]
+     - `accountNumber_12345_ABC_page_2`: [activity51, activity52, activity53, ...]
+   
+3. **Transaction Details Call (`/phx/transactionActivityDetails`):**
+   - When a user clicks on an activity (e.g., `ActivityID_2024-20-20-20220203`), you extract the **account number**, **page number**, and **activity ID** from the request payload.
+   - You will construct the cache key using the **account number** and **page number** (e.g., `accountNumber_12345_ABC_page_1`).
+   - Check the cache for the **entire array** of activities corresponding to that page (i.e., `accountNumber_12345_ABC_page_1`).
+   
+4. **Check Cache for Activity:**
+   - If the cache key exists, you pull the entire array of activities stored for that page.
+   - Search through the array for the requested **activity ID**.
+   - Once found, remove that specific activity object, and return the details in the response.
+   
+5. **Cache Miss Handling:**
+   - If the cache doesn’t have the array for the requested page (e.g., cache expired or missing), you make the backend call to fetch the details for that page.
+   - Once the page's data is retrieved, you cache the array under the same cache key (`accountNumber_12345_ABC_page_1`) for future requests.
 
-### **Updated Caching Scenarios:**
+6. **Cache Expiry:**
+   - Each page cache entry should have a time-to-live (TTL) to ensure it eventually expires and gets refreshed. This can be something like `TTL = 10 minutes`.
+   - When the cache expires or if the activity is not found in the cache, a backend call will fetch the fresh data, and the cache will be updated.
 
-#### **Scenario 1: First-time API Call**
-- User requests data for **Account Number: 1000002022**, **Page 1**.
-- Cache key **"Acct-1000002022_Page_1"** is checked.
-- **Cache Miss** → Backend API call is made.
-- Response is stored in the cache with a **TTL (Time-To-Live) of 5 minutes**.
+### **Diagram Flow:**
 
----
+- **Step 1**: Initial Call (`/phx/transactionActivity`) → Cache the entire set of activities for each page under a unique cache key: `accountNumber_page_X`.
+- **Step 2**: Click on an activity → Extract **account number**, **page number**, and **activity ID**.
+- **Step 3**: Check cache for key: `accountNumber_page_X` → Retrieve entire array of activities for the page.
+- **Step 4**: Find the activity in the array, remove it, and return it to the user.
+- **Step 5**: If cache miss → Make backend call to fetch the activity details → Cache the new response.
 
-#### **Scenario 2: User Moves to Page 2, Page 3, etc.**
-- User navigates to **Page 2**.
-- Cache key **"Acct-1000002022_Page_2"** is checked.
-- **Cache Miss** → Backend API call is made, and the response is cached.
-- User navigates to **Page 3**, **Page 4**… Same process repeats.
+### **Example:**
 
----
+1. **Initial API Call** returns activities for `accountNumber_12345_ABC_page_1`:
+   ```
+   accountNumber_12345_ABC_page_1: [
+     { activityID: 2024-20-20-20220203, description: "Activity 1", ... },
+     { activityID: 2024-20-20-20220204, description: "Activity 2", ... },
+     { activityID: 2024-20-20-20220205, description: "Activity 3", ... }
+   ]
+   ```
 
-#### **Scenario 3: User Changes Filters (Payload Changes)**
-- User changes **date filters** or any other request parameter.
-- Since the payload has changed, **all cache entries for the account number should be cleared**:
-  ```plaintext
-  CacheKey: "Acct-1000002022_Page_1" → Cleared
-  CacheKey: "Acct-1000002022_Page_2" → Cleared
-  CacheKey: "Acct-1000002022_Page_3" → Cleared
-  ```
-- **Backend API call is made again** for Page 1 and fresh data is cached.
+2. **Click on ActivityID_2024-20-20-20220203** from page 1:
+   - Payload: `accountNumber: 12345_ABC, pageNumber: 1, activityID: 2024-20-20-20220203`
+   
+3. **Check cache for `accountNumber_12345_ABC_page_1`**:
+   - If found, return the specific activity with ID `2024-20-20-20220203`.
+   
+4. **Cache Miss** (if expired or missing):
+   - Make backend call to fetch data.
+   - Cache the new data for future requests.
 
----
+This way, you avoid making redundant backend calls by caching the entire array of activities per page and only pulling individual activity details when needed, streamlining the process for better performance.
 
-#### **Scenario 4: User Goes Back to Page 1 After Visiting Other Pages**
-- If the cache entry **"Acct-1000002022_Page_1"** still exists within **5 minutes**, the cached data is served.
-- **If the cache has expired**, a new backend API call is made, and fresh data is cached.
-
----
-
-#### **Scenario 5: User Exits ActivityDetails and Returns Later**
-- If the user exits **ActivityDetails** and comes back later:
-  - **All cache related to the account number should be cleared** to ensure fresh data is loaded.
-  - When the user reopens **Page 1**, a **backend call is made** and new data is cached.
-
----
-
-### **Cache Management Summary**
-| **Scenario** | **Cache Action** |
-|-------------|----------------|
-| First-time API call | Fetch from backend, store in cache. |
-| User moves between pages | Serve from cache if available, otherwise fetch from backend. |
-| Payload change (filters updated) | Clear all cache for the account number, fetch fresh data. |
-| User goes back to Page 1 | Serve from cache if within TTL, otherwise fetch fresh data. |
-| User exits and returns | Clear all cache for the account number, fetch fresh data. |
-
----
-
-### **Final Considerations**
-- **Cache Invalidation Strategy:**  
-  - Cache expires automatically after **5 minutes** (TTL).  
-  - Cache is **cleared immediately** when the payload changes or user exits the activity.  
-- **Improved Performance:**  
-  - Cached data reduces backend calls for repeated page requests within the TTL.  
-  - Ensures fresh data is loaded when necessary by clearing outdated cache entries.
-
-Does this revised approach align with your caching requirements? Let me know if any additional scenarios need to be covered! 🚀
+Does this approach look good to you now?
