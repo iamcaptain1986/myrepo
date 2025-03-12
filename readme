@@ -1,0 +1,77 @@
+Got it! Now, instead of using **Activity ID** as the cache key, we're using **Account Number**. The updated cache key format is:  
+
+### **Updated Cache Key Format**  
+```plaintext
+CacheKey: "Acct-{AccountNumber}_Page_{PageNumber}"
+```
+**Example:**  
+For **Account Number = 1000002022**, and **Page 1**, the cache key will be:  
+```plaintext
+CacheKey: "Acct-1000002022_Page_1"
+```
+
+---
+
+### **Updated Caching Scenarios:**
+
+#### **Scenario 1: First-time API Call**
+- User requests data for **Account Number: 1000002022**, **Page 1**.
+- Cache key **"Acct-1000002022_Page_1"** is checked.
+- **Cache Miss** → Backend API call is made.
+- Response is stored in the cache with a **TTL (Time-To-Live) of 5 minutes**.
+
+---
+
+#### **Scenario 2: User Moves to Page 2, Page 3, etc.**
+- User navigates to **Page 2**.
+- Cache key **"Acct-1000002022_Page_2"** is checked.
+- **Cache Miss** → Backend API call is made, and the response is cached.
+- User navigates to **Page 3**, **Page 4**… Same process repeats.
+
+---
+
+#### **Scenario 3: User Changes Filters (Payload Changes)**
+- User changes **date filters** or any other request parameter.
+- Since the payload has changed, **all cache entries for the account number should be cleared**:
+  ```plaintext
+  CacheKey: "Acct-1000002022_Page_1" → Cleared
+  CacheKey: "Acct-1000002022_Page_2" → Cleared
+  CacheKey: "Acct-1000002022_Page_3" → Cleared
+  ```
+- **Backend API call is made again** for Page 1 and fresh data is cached.
+
+---
+
+#### **Scenario 4: User Goes Back to Page 1 After Visiting Other Pages**
+- If the cache entry **"Acct-1000002022_Page_1"** still exists within **5 minutes**, the cached data is served.
+- **If the cache has expired**, a new backend API call is made, and fresh data is cached.
+
+---
+
+#### **Scenario 5: User Exits ActivityDetails and Returns Later**
+- If the user exits **ActivityDetails** and comes back later:
+  - **All cache related to the account number should be cleared** to ensure fresh data is loaded.
+  - When the user reopens **Page 1**, a **backend call is made** and new data is cached.
+
+---
+
+### **Cache Management Summary**
+| **Scenario** | **Cache Action** |
+|-------------|----------------|
+| First-time API call | Fetch from backend, store in cache. |
+| User moves between pages | Serve from cache if available, otherwise fetch from backend. |
+| Payload change (filters updated) | Clear all cache for the account number, fetch fresh data. |
+| User goes back to Page 1 | Serve from cache if within TTL, otherwise fetch fresh data. |
+| User exits and returns | Clear all cache for the account number, fetch fresh data. |
+
+---
+
+### **Final Considerations**
+- **Cache Invalidation Strategy:**  
+  - Cache expires automatically after **5 minutes** (TTL).  
+  - Cache is **cleared immediately** when the payload changes or user exits the activity.  
+- **Improved Performance:**  
+  - Cached data reduces backend calls for repeated page requests within the TTL.  
+  - Ensures fresh data is loaded when necessary by clearing outdated cache entries.
+
+Does this revised approach align with your caching requirements? Let me know if any additional scenarios need to be covered! 🚀
