@@ -1,69 +1,58 @@
-Got it! That makes sense. So, here's a refined breakdown based on your clarification:
+import { Component, HostListener } from '@angular/core';
 
-### **Refined Caching Strategy:**
+@Component({
+  selector: 'app-no-copy',
+  templateUrl: './no-copy.component.html',
+  styleUrls: ['./no-copy.component.css']
+})
+export class NoCopyComponent {
 
-1. **Initial API Call (`/phx/transactionActivity`):**
-   - When you initially call the `/phx/transactionActivity` endpoint, you retrieve the full set of transaction activities, which may span multiple pages.
-   - You will **cache the entire array of activities** for each page under a unique cache key based on the **account number** and **page number**. The cache key will look something like:
-     ```
-     accountNumber_ABC_page_1
-     ```
-     where:
-     - `accountNumber_ABC` is the account number (e.g., `12345_ABC`).
-     - `page_1` refers to the first page of the results.
-   
-2. **Cache Structure:**
-   - Cache the array of activities for that page under the constructed cache key. For example:
-     - `accountNumber_12345_ABC_page_1`: [activity1, activity2, activity3, ...]
-     - `accountNumber_12345_ABC_page_2`: [activity51, activity52, activity53, ...]
-   
-3. **Transaction Details Call (`/phx/transactionActivityDetails`):**
-   - When a user clicks on an activity (e.g., `ActivityID_2024-20-20-20220203`), you extract the **account number**, **page number**, and **activity ID** from the request payload.
-   - You will construct the cache key using the **account number** and **page number** (e.g., `accountNumber_12345_ABC_page_1`).
-   - Check the cache for the **entire array** of activities corresponding to that page (i.e., `accountNumber_12345_ABC_page_1`).
-   
-4. **Check Cache for Activity:**
-   - If the cache key exists, you pull the entire array of activities stored for that page.
-   - Search through the array for the requested **activity ID**.
-   - Once found, remove that specific activity object, and return the details in the response.
-   
-5. **Cache Miss Handling:**
-   - If the cache doesn’t have the array for the requested page (e.g., cache expired or missing), you make the backend call to fetch the details for that page.
-   - Once the page's data is retrieved, you cache the array under the same cache key (`accountNumber_12345_ABC_page_1`) for future requests.
+  // Block copy event
+  @HostListener('copy', ['$event'])
+  onCopy(event: ClipboardEvent) {
+    event.preventDefault();
+    alert('Copying is not allowed.');
+  }
 
-6. **Cache Expiry:**
-   - Each page cache entry should have a time-to-live (TTL) to ensure it eventually expires and gets refreshed. This can be something like `TTL = 10 minutes`.
-   - When the cache expires or if the activity is not found in the cache, a backend call will fetch the fresh data, and the cache will be updated.
+  // Block cut event
+  @HostListener('cut', ['$event'])
+  onCut(event: ClipboardEvent) {
+    event.preventDefault();
+    alert('Cutting is not allowed.');
+  }
 
-### **Diagram Flow:**
+  // Block context menu (right-click)
+  @HostListener('contextmenu', ['$event'])
+  onContextMenu(event: MouseEvent) {
+    event.preventDefault();
+    alert('Right-click is not allowed.');
+  }
 
-- **Step 1**: Initial Call (`/phx/transactionActivity`) → Cache the entire set of activities for each page under a unique cache key: `accountNumber_page_X`.
-- **Step 2**: Click on an activity → Extract **account number**, **page number**, and **activity ID**.
-- **Step 3**: Check cache for key: `accountNumber_page_X` → Retrieve entire array of activities for the page.
-- **Step 4**: Find the activity in the array, remove it, and return it to the user.
-- **Step 5**: If cache miss → Make backend call to fetch the activity details → Cache the new response.
+  // Block keyboard shortcuts (Ctrl+C, Ctrl+X)
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent) {
+    const div = document.querySelector('.no-copy');
 
-### **Example:**
+    if (div?.contains(document.activeElement)) {
+      // Block Ctrl+C (Copy)
+      if (event.ctrlKey && event.key === 'c') {
+        event.preventDefault();
+        alert('Copying is not allowed.');
+      }
 
-1. **Initial API Call** returns activities for `accountNumber_12345_ABC_page_1`:
-   ```
-   accountNumber_12345_ABC_page_1: [
-     { activityID: 2024-20-20-20220203, description: "Activity 1", ... },
-     { activityID: 2024-20-20-20220204, description: "Activity 2", ... },
-     { activityID: 2024-20-20-20220205, description: "Activity 3", ... }
-   ]
-   ```
+      // Block Ctrl+X (Cut)
+      if (event.ctrlKey && event.key === 'x') {
+        event.preventDefault();
+        alert('Cutting is not allowed.');
+      }
+    }
+  }
+}
 
-2. **Click on ActivityID_2024-20-20-20220203** from page 1:
-   - Payload: `accountNumber: 12345_ABC, pageNumber: 1, activityID: 2024-20-20-20220203`
-   
-3. **Check cache for `accountNumber_12345_ABC_page_1`**:
-   - If found, return the specific activity with ID `2024-20-20-20220203`.
-   
-4. **Cache Miss** (if expired or missing):
-   - Make backend call to fetch data.
-   - Cache the new data for future requests.
+<div class="no-copy">
+    This text cannot be copied.
+</div>
 
-This way, you avoid making redundant backend calls by caching the entire array of activities per page and only pulling individual activity details when needed, streamlining the process for better performance.
 
-Does this approach look good to you now?
+
+<app-no-copy></app-no-copy>
